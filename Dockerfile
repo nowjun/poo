@@ -26,4 +26,4 @@ COPY server_encode.py .
 EXPOSE 8765
 
 # Command to run the server
-CMD ["/bin/bash", "-c", "Xvfb :1 -screen 0 1280x720x24 & openbox & xterm & python3 server_encode.py"]
+CMD ["/bin/bash", "-c", "Xvfb :1 -screen 0 1280x720x24 & openbox & xterm & python3 server_debug.py"]
