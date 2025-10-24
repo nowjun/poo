@@ -1,0 +1,26 @@
+# Use Python base image for testing
+FROM python:3.9-slim
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    python3-pip \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Python dependencies
+RUN pip3 install websockets numpy
+
+# Create a directory for the application
+WORKDIR /app
+
+# Copy the test client script
+COPY test_client.py .
+
+# Create appuser account
+RUN useradd -m -s /bin/bash appuser && \
+    chown -R appuser:appuser /app
+
+# Switch to appuser
+USER appuser
+
+# Command to run the test client
+CMD ["python3", "test_client.py"]

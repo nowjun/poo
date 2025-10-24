@@ -23,7 +23,7 @@ RUN useradd -m -s /bin/bash appuser && \
 WORKDIR /app
 
 # Copy the server script into the container
-COPY server_encode.py .
+COPY server_debug.py .
 
 # Change ownership to appuser
 RUN chown -R appuser:appuser /app
