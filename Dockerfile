@@ -1,0 +1,29 @@
+# Use an NVIDIA CUDA base image
+FROM nvidia/cuda:11.8.0-cudnn8-devel-ubuntu20.04
+
+# Set environment variables to prevent interactive prompts during installation
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    xvfb \
+    openbox \
+    xterm \
+    ffmpeg \
+    python3-pip \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Python dependencies
+RUN pip3 install websockets numpy torch torchvision
+
+# Create a directory for the application
+WORKDIR /app
+
+# Copy the server script into the container
+COPY server_encode.py .
+
+# Expose the WebSocket port
+EXPOSE 8765
+
+# Command to run the server
+CMD ["/bin/bash", "-c", "Xvfb :1 -screen 0 1280x720x24 & openbox & xterm & python3 server_encode.py"]

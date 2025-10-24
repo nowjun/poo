@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Remote Desktop Viewer</title>
+    <style>
+        body { font-family: sans-serif; display: flex; flex-direction: column; align-items: center; }
+        #video-container { border: 1px solid black; min-width: 1280px; min-height: 720px; background: #333; margin-bottom: 10px;}
+        #stats { font-family: monospace; font-size: 16px; }
+    </style>
+    <!-- Required libraries: pako for zlib decompression, ONNX Runtime for model inference -->
+    <script src="https://cdn.jsdelivr.net/npm/pako@2.1.0/dist/pako.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/ort.min.js"></script>
+</head>
+<body>
+    <h1>Remote Desktop Viewer</h1>
+    <p>Status: <span id="status">Connecting...</span></p>
+    <canvas id="video-container" width="1280" height="720"></canvas>
+    <div id="stats">
+        <p>FPS: <span id="fps">0</span></p>
+        <p>Latency (ms): <span id="latency">0</span></p>
+    </div>
+
+    <script>
+        const statusEl = document.getElementById('status');
+        const canvas = document.getElementById('video-container');
+        const ctx = canvas.getContext('2d');
+        const fpsEl = document.getElementById('fps');
+        const latencyEl = document.getElementById('latency');
+
+        let ortSession;
+        let frameCount = 0;
+        let lastFPSTime = performance.now();
+
+        // --- 1. Initialize ONNX Runtime and Load Model ---
+        async function initORT() {
+            try {
+                statusEl.textContent = 'Loading ONNX model...';
+                // Prefer 'webnn' for NPU acceleration, fallback to 'webgl' for GPU.
+                ort.env.wasm.numThreads = navigator.hardwareConcurrency || 4;
+                const session = await ort.InferenceSession.create('./decoder.onnx', {
+                    executionProviders: ['webnn', 'webgl'],
+                    graphOptimizationLevel: 'all',
+                });
+                statusEl.textContent = `Model loaded. Provider: ${session.executionProviders[0]}`;
+                return session;
+            } catch (e) {
+                statusEl.textContent = `Error loading model: ${e.message}`;
+                console.error(e);
+            }
+        }
+
+        // --- 2. WebSocket Communication ---
+        async function connectWebSocket() {
+            ortSession = await initORT();
+            if (!ortSession) return;
+
+            const ws = new WebSocket(`ws://${window.location.hostname}:8765`);
+            ws.binaryType = 'arraybuffer';
+
+            ws.onopen = () => {
+                statusEl.textContent += ' | WebSocket Connected.';
+            };
+
+            ws.onmessage = async (event) => {
+                // --- 3. Parse and Decompress Data ---
+                const data = event.data;
+                const headerLen = new DataView(data.slice(0, 4)).getUint32(0, false);
+                const headerBytes = data.slice(4, 4 + headerLen);
+                const payload = data.slice(4 + headerLen);
+                const header = JSON.parse(new TextDecoder("utf-8").decode(headerBytes));
+
+                const decompressed = pako.inflate(new Uint8Array(payload));
+                
+                // --- 4. Decode with ONNX Model ---
+                const latentInt8 = new Int8Array(decompressed.buffer);
+                const latentFloat32 = new Float32Array(latentInt8.length);
+                for (let i = 0; i < latentInt8.length; i++) {
+                    latentFloat32[i] = latentInt8[i] * header.scale;
+                }
+
+                const tensor = new ort.Tensor('float32', latentFloat32, [1, header.c, header.h, header.w]);
+                const feeds = { [ortSession.inputNames[0]]: tensor };
+                const results = await ortSession.run(feeds);
+                const outputTensor = results[ortSession.outputNames[0]];
+                
+                // --- 5. Render to Canvas ---
+                const imageData = tensorToImageData(outputTensor, header.orig_w, header.orig_h);
+                ctx.putImageData(imageData, 0, 0);
+
+                // --- 6. Calculate Stats ---
+                const now = performance.now();
+                frameCount++;
+                if (now - lastFPSTime > 1000) {
+                    fpsEl.textContent = frameCount;
+                    frameCount = 0;
+                    lastFPSTime = now;
+                }
+                const serverTime_s = header.timestamp; // time is in seconds from asyncio.get_event_loop().time()
+                const clientTime_s = performance.now() / 1000.0;
+                // Note: This simple latency calculation requires server and client clocks to be synchronized.
+                // A more robust solution would involve a clock-sync protocol.
+                const networkLatency = clientTime_s - serverTime_s;
+                latencyEl.textContent = (networkLatency * 1000).toFixed(2);
+            };
+
+            ws.onclose = () => {
+                statusEl.textContent = 'Disconnected from server.';
+            };
+
+            ws.onerror = (error) => {
+                statusEl.textContent = `WebSocket Error: ${error.message}`;
+            };
+        }
+
+        // Helper function to convert the output tensor (CHW) to ImageData (RGBA)
+        function tensorToImageData(tensor, width, height) {
+            const [r, g, b] = [tensor.data.slice(0, width * height), 
+                               tensor.data.slice(width * height, 2 * width * height), 
+                               tensor.data.slice(2 * width * height, 3 * width * height)];
+            const imageData = ctx.createImageData(width, height);
+            for (let i = 0; i < width * height; i++) {
+                imageData.data[i * 4] = r[i] * 255;
+                imageData.data[i * 4 + 1] = g[i] * 255;
+                imageData.data[i * 4 + 2] = b[i] * 255;
+                imageData.data[i * 4 + 3] = 255; // Alpha channel
+            }
+            return imageData;
+        }
+
+        connectWebSocket();
+    </script>
+</body>
+</html>
