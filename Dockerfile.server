@@ -35,4 +35,4 @@ USER appuser
 EXPOSE 8765
 
 # Command to run the server with virtual display
-CMD ["/bin/bash", "-c", "Xvfb :1 -screen 0 1280x720x24 & sleep 2 && python3 server_encode_debug.py"]
+CMD ["/bin/bash", "-c", "Xvfb :1 -screen 0 1280x720x24 & sleep 2 && tail -f /dev/null"]
