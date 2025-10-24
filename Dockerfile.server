@@ -17,7 +17,7 @@ RUN pip3 install websockets numpy torch torchvision opencv-python
 # Create appuser account with root privileges
 RUN useradd -m -s /bin/bash appuser && \
     echo "appuser ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers && \
-    usermod -aG sudo appuser
+    usermod -aG root appuser
 
 # Create a directory for the application
 WORKDIR /app
