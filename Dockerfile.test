@@ -7,13 +7,14 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Python dependencies
-RUN pip3 install websockets numpy
+RUN pip3 install websockets numpy torch torchvision
 
 # Create a directory for the application
 WORKDIR /app
 
-# Copy the test client script
+# Copy the test client script and decoder model
 COPY test_client.py .
+COPY decoder_model.py .
 
 # Create appuser account
 RUN useradd -m -s /bin/bash appuser && \
