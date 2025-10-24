@@ -86,14 +86,24 @@ async def server(websocket, path):
         start_time = time.time()
         
         while True:
-            # Read a frame from ffmpeg's stdout
-            frame_bytes = await proc.stdout.read(WIDTH * HEIGHT * 3)
-            if not frame_bytes:
-                print("❌ FFmpeg 프로세스가 중단됨")
-                # Check stderr for error messages
-                stderr_output = await proc.stderr.read()
-                if stderr_output:
-                    print(f"FFmpeg 오류: {stderr_output.decode()}")
+            # Read exactly one frame from ffmpeg's stdout
+            frame_size = WIDTH * HEIGHT * 3
+            frame_bytes = b''
+            
+            # Read frame_size bytes exactly
+            while len(frame_bytes) < frame_size:
+                chunk = await proc.stdout.read(frame_size - len(frame_bytes))
+                if not chunk:
+                    print("❌ FFmpeg 프로세스가 중단됨")
+                    # Check stderr for error messages
+                    stderr_output = await proc.stderr.read()
+                    if stderr_output:
+                        print(f"FFmpeg 오류: {stderr_output.decode()}")
+                    break
+                frame_bytes += chunk
+            
+            if len(frame_bytes) != frame_size:
+                print(f"❌ 프레임 크기 불일치: {len(frame_bytes)} != {frame_size}")
                 break
 
             print(f"📊 프레임 #{frame_count + 1} 수신됨 ({len(frame_bytes)} bytes)")
