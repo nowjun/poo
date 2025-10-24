@@ -1,11 +1,10 @@
 #!/bin/bash
 
-# Build the Docker image
-docker build -t remote-desktop-encoder .
+# Build the Docker image using Dockerfile.server
+docker build -f Dockerfile.server -t remote-desktop-encoder .
 
-# Run the Docker container with current user permissions
+# Run the Docker container with appuser
 docker run --gpus all -p 8765:8765 --rm \
-  --user $(id -u):$(id -g) \
   -e DISPLAY=:1 \
   -e QT_X11_NO_MITSHM=1 \
   -e _X11_NO_MITSHM=1 \
