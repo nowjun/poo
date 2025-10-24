@@ -7,4 +7,4 @@ echo "🚀 테스트 클라이언트 실행 중..."
 echo "서버가 실행 중인지 확인하세요 (포트 8765)"
 echo ""
 
-docker run -d --rm --network host test-client
+docker run --rm --network host test-client
